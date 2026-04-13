@@ -1,0 +1,42 @@
+<?php
+
+namespace {{ namespace }};
+
+use App\Models\{{ model }};
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+use Luminix\Sheets\Default\DefaultExportable;
+
+class {{ class }} extends DefaultExportable
+{
+    public function __construct()
+    {
+        parent::__construct({{ model }}::class);
+    }
+
+    /**
+     * Map a model instance to a spreadsheet row.
+     *
+     * Keys become the column headers on the first row.
+     *
+     * @return array<string, mixed>
+     */
+    public function map(Model $model): array
+    {
+        return parent::map($model);
+    }
+
+    // Uncomment to restrict exported columns:
+    // public function columns(): ?array { return ['name', 'email', 'created_at']; }
+
+    // public function query(Builder $query): Builder { return $query->where('active', true); }
+
+    // public function fileName(): string { return 'users_' . now()->format('Y_m_d'); }
+
+    // public function format(): string { return 'csv'; } // xlsx | csv | ods
+
+    // public function beforeExport(Collection $rows): void {}
+
+    // public function afterExport(): void {}
+}

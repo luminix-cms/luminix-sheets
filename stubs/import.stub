@@ -1,0 +1,51 @@
+<?php
+
+namespace {{ namespace }};
+
+use App\Models\{{ model }};
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
+use Luminix\Sheets\Default\DefaultImportable;
+
+class {{ class }} extends DefaultImportable
+{
+    public function __construct()
+    {
+        parent::__construct({{ model }}::class);
+    }
+
+    /**
+     * Map a spreadsheet row to model attributes.
+     *
+     * Returning null skips the row entirely.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    public function map(array $row, int $rowIndex): ?array
+    {
+        return parent::map($row, $rowIndex);
+    }
+
+    /**
+     * Per-row validation rules.
+     *
+     * @return array<string, mixed>
+     */
+    public function rules(): array
+    {
+        return [
+            // 'email' => 'required|email|unique:users',
+        ];
+    }
+
+    // public function beforeImport(UploadedFile $file): void {}
+
+    // public function afterImport(Collection $imported): void {}
+
+    // public function useTransaction(): bool { return true; }
+
+    // public function headingRow(): int { return 1; }
+
+    // Uncomment and return an array to restrict importable columns:
+    // public function allowedColumns(): ?array { return ['name', 'email']; }
+}

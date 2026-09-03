@@ -28,9 +28,12 @@ class ImportRequest extends FormRequest
         $formats = implode(', ', $this->formats());
 
         return [
-            'file.required' => 'Please upload a spreadsheet file.',
-            'file.extensions' => "Only {$formats} files are accepted. Re-save the file in one of these formats and try again.",
-            'file.max' => 'The uploaded file must not exceed :max KB.',
+            'file.required' => __('Please upload a spreadsheet file.'),
+            'file.extensions' => __(
+                'Only :formats files are accepted. Re-save the file in one of these formats and try again.',
+                ['formats' => $formats]
+            ),
+            'file.max' => __('The uploaded file must not exceed :max KB.'),
         ];
     }
 

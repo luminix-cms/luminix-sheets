@@ -91,6 +91,8 @@ class ExportTest extends TestCase
 
     public function test_export_formats_dates_booleans_and_numbers(): void
     {
+        $this->app->setLocale('pt-BR');
+
         $this->player('Ana', [
             'score' => 42,
             'active' => false,

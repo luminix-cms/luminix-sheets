@@ -25,6 +25,10 @@ class LuminixSheetsServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // JSON, not a namespaced group: luminix/admin ships `trans('*')` in the
+        // boot payload, where @luminix/sheets-for-mui-cms reads its labels.
+        $this->loadJsonTranslationsFrom(__DIR__.'/../lang');
+
         $this->publishConfig();
         $this->publishStubs();
         $this->registerCommands();
@@ -63,7 +67,7 @@ class LuminixSheetsServiceProvider extends ServiceProvider
             $permission = LuminixSheetsServiceProvider::permissionFor('import');
 
             if (! ModelSheetResolver::isImportable($class)) {
-                abort(404, "Model [{$class}] does not support import.");
+                abort(404, __('Model [:model] does not support import.', ['model' => $class]));
             }
 
             if (
@@ -71,7 +75,7 @@ class LuminixSheetsServiceProvider extends ServiceProvider
                 && config('luminix.backend.security.gates_enabled', true)
                 && ! Gate::allows($permission.'-'.$alias, [null])
             ) {
-                abort(401);
+                abort(401, __('You are not authorized to perform this action.'));
             }
 
             // Resolved after the gate: validating first would answer an
@@ -87,7 +91,12 @@ class LuminixSheetsServiceProvider extends ServiceProvider
             }
 
             return response()->json([
-                'message' => $imported->count().' record(s) imported successfully.',
+                'message' => trans_choice(
+                    '{0} No records imported.|{1} :count record imported successfully.'
+                        .'|[2,*] :count records imported successfully.',
+                    $imported->count(),
+                    ['count' => $imported->count()],
+                ),
                 'count' => $imported->count(),
             ], 201);
         });
@@ -108,7 +117,7 @@ class LuminixSheetsServiceProvider extends ServiceProvider
             $permission = LuminixSheetsServiceProvider::permissionFor('export');
 
             if (! ModelSheetResolver::isExportable($class)) {
-                abort(404, "Model [{$class}] does not support export.");
+                abort(404, __('Model [:model] does not support export.', ['model' => $class]));
             }
 
             if (
@@ -116,7 +125,7 @@ class LuminixSheetsServiceProvider extends ServiceProvider
                 && config('luminix.backend.security.gates_enabled', true)
                 && ! Gate::allows($permission.'-'.$alias, [null])
             ) {
-                abort(401);
+                abort(401, __('You are not authorized to perform this action.'));
             }
 
             $handler = ModelSheetResolver::exporter($class);

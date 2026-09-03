@@ -42,6 +42,10 @@ class DefaultExportableTest extends TestCase
 
     public function test_dates_enums_booleans_and_arrays_reach_the_writer_as_text(): void
     {
+        // Booleans and the date format come from the lang files, so the
+        // expectations below only hold under a locale the package ships.
+        $this->app->setLocale('pt-BR');
+
         $profile = new Profile([
             'name' => 'Ana',
             'tags' => ['a', 'b'],
@@ -62,5 +66,20 @@ class DefaultExportableTest extends TestCase
         $this->assertSame('["a","b"]', $row['Tags']);
         $this->assertSame('04/03/2026 15:30', $row['Joined At']);
         $this->assertSame('Não', $row['Active']);
+    }
+
+    public function test_booleans_and_dates_follow_the_application_locale(): void
+    {
+        $this->app->setLocale('en');
+
+        $profile = new Profile([
+            'joined_at' => '2026-03-04 15:30:00',
+            'active' => false,
+        ]);
+
+        $row = (new DefaultExportable(Profile::class))->map($profile);
+
+        $this->assertSame('No', $row['Active']);
+        $this->assertSame('03/04/2026 15:30', $row['Joined At']);
     }
 }

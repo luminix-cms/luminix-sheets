@@ -126,10 +126,11 @@ class DefaultExportable implements ExportsFromSheet
         $value = $model->getAttribute($column);
 
         return match (true) {
-            $value instanceof \DateTimeInterface => $value->format('d/m/Y H:i'),
+            // The key is the en-US format; lang/pt-BR.json translates it.
+            $value instanceof \DateTimeInterface => $value->format(__('m/d/Y H:i')),
             $value instanceof \BackedEnum => $value->value,
             $value instanceof \UnitEnum => $value->name,
-            is_bool($value) => $value ? 'Sim' : 'Não',
+            is_bool($value) => __($value ? 'Yes' : 'No'),
             is_array($value) => json_encode($value, JSON_UNESCAPED_UNICODE),
             default => $value,
         };

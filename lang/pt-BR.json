@@ -1,0 +1,32 @@
+{
+    "You are not authorized to perform this action.": "Você não tem autorização para executar esta ação.",
+    "Model [:model] does not support import.": "O model [:model] não suporta importação.",
+    "Model [:model] does not support export.": "O model [:model] não suporta exportação.",
+    "{0} No records imported.|{1} :count record imported successfully.|[2,*] :count records imported successfully.": "{0} Nenhum registro importado.|{1} :count registro importado com sucesso.|[2,*] :count registros importados com sucesso.",
+
+    "Please upload a spreadsheet file.": "Envie um arquivo de planilha.",
+    "Only :formats files are accepted. Re-save the file in one of these formats and try again.": "Somente arquivos :formats são aceitos. Salve o arquivo em um desses formatos e tente novamente.",
+    "The uploaded file must not exceed :max KB.": "O arquivo enviado não pode ultrapassar :max KB.",
+    "{1} The import file contains :count row with validation errors.|[2,*] The import file contains :count rows with validation errors.": "{1} O arquivo de importação contém :count linha com erros de validação.|[2,*] O arquivo de importação contém :count linhas com erros de validação.",
+
+    "Yes": "Sim",
+    "No": "Não",
+    "m/d/Y H:i": "d/m/Y H:i",
+
+    "Export": "Exportar",
+    "Import": "Importar",
+    "Export selection": "Exportar seleção",
+    "Import :model": "Importar :model",
+    "Advanced import": "Importação avançada",
+    "Cancel": "Cancelar",
+    "Choose another file": "Escolher outro arquivo",
+    "Drop the spreadsheet here or click to choose": "Solte a planilha aqui ou clique para escolher",
+    "No preview available for this format. The file will be read by the server.": "Sem pré-visualização para este formato. O arquivo será lido pelo servidor.",
+    "Preview — showing :shown of :total rows": "Pré-visualização — mostrando :shown de :total linhas",
+    "Rows rejected: :rejected": "Linhas rejeitadas: :rejected",
+    "Row": "Linha",
+    "Column": "Coluna",
+    "Problem": "Problema",
+    "The export failed with status :status.": "A exportação falhou com status :status.",
+    "The import failed with status :status.": "A importação falhou com status :status."
+}

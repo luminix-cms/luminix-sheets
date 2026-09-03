@@ -149,6 +149,49 @@ O `luminix/backend` não tem entrada para `export`/`import` no próprio mapa de
 permissões, então os verbos são resolvidos aqui. Um verbo `null` desliga tanto o
 `Gate` quanto o escopo `allowed` daquela ação.
 
+## Traduções
+
+Um arquivo só: [`lang/pt-BR.json`](lang/pt-BR.json), no formato de tradução JSON
+do Laravel — **a linha em inglês é a chave**, então não existe arquivo `en`: um
+locale sem tradução cai na própria chave e continua legível.
+
+```php
+__('Please upload a spreadsheet file.');
+```
+
+Ele cobre os dois lados da funcionalidade:
+
+- **As mensagens HTTP** das rotas de importação/exportação (autorização, erros
+  de upload, resultado da importação).
+- **Os rótulos do CMS.** O `@luminix/sheets-for-mui-cms` (o pacote npm irmão)
+  não carrega dicionário próprio: o `luminix/admin` manda `trans('*')` — todo o
+  dicionário JSON — no payload de boot, e é dali que o i18next do CMS lê.
+
+Duas coisas que decorrem disso:
+
+- **Os placeholders são estilo Laravel (`:model`), nunca `{{model}}`** — o CMS
+  inicializa o i18next com `prefix: ':'` e sufixo vazio, então um placeholder no
+  formato do i18next aparece literal na tela.
+- **Para sobrescrever qualquer linha, repita a chave no `lang/{locale}.json` da
+  própria aplicação.** O `FileLoader` do Laravel mescla os caminhos dos pacotes
+  primeiro e o da aplicação por último, então a aplicação ganha. Não há
+  `vendor:publish` de tradução — um JSON em `lang/vendor` não é lido de volta.
+
+Três chaves não são frases, e decidem o conteúdo do arquivo exportado pelo
+`DefaultExportable`:
+
+| Chave | Sem tradução (`en`) | `pt-BR` |
+| --- | --- | --- |
+| `Yes` / `No` | `Yes` / `No` | `Sim` / `Não` |
+| `m/d/Y H:i` | `m/d/Y H:i` | `d/m/Y H:i` |
+
+Ou seja, **o booleano e o formato de data seguem o locale da aplicação**. Uma
+aplicação em `en` que esperava `Sim`/`Não` precisa de `APP_LOCALE=pt-BR` ou de
+sobrescrever as duas chaves.
+
+Um novo idioma é um `lang/{locale}.json` a mais no pacote, ou as chaves no
+arquivo da própria aplicação.
+
 ## Handlers
 
 Sem handler declarado, o pacote usa `DefaultExportable` / `DefaultImportable`:

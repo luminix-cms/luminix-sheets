@@ -22,16 +22,6 @@ rewrite: its engine-defect findings are all closed below.
     of which run
   - done: ticks once the file is merged to `master`
 
-- [ ] **`M3-upstream` — a local branch tracks nothing**
-  - evidence: `git for-each-ref → feat/MotorDePlanilhas -> (empty)`; `master -> origin/master ✓`
-  - action: `git push -u origin feat/MotorDePlanilhas`
-  - done: every entry maps `X -> origin/X`
-
-- [ ] **`M4-commits` — history predates the convention**
-  - evidence: `git log --oneline → 1/1 off-convention: "first commit"`
-  - action: convention applies **going forward**; never rewrite published history
-  - done: baseline recorded — closes on the next conforming commit
-
 ## SHOULD
 
 - [ ] **`S1-refs` — reference directory did not exist**
@@ -70,6 +60,14 @@ rewrite: its engine-defect findings are all closed below.
   constraint, not deployed, so there is no QA environment for a `Sandbox` branch to feed. User
   confirmed 2026-09-03. The rest of the git model (`feat/`/`fix/` off `master`, `--no-ff`,
   upstream rule) applies unchanged.
+
+- [x] **`M3-upstream`** — evidence: `git for-each-ref → feat/MotorDePlanilhas ->
+  origin/feat/MotorDePlanilhas`, `master -> origin/master`. **closed 2026-09-03.**
+
+- [x] **`M4-commits`** — evidence: three conforming commits on `feat/MotorDePlanilhas`
+  (`(MINOR) refactor(planilhas): …`, `docs(planilhas): …`, `ci(planilhas): …`). The single
+  pre-existing `first commit` stays as it is: published history is never rewritten.
+  **closed 2026-09-03.**
 
 - [x] **`M7-gates`** — evidence: `.github/workflows/checks.yml`, triggered by `pull_request`
   into `master` and by `push` to `master`, running `pint --test` → `composer test` over a PHP
@@ -137,7 +135,9 @@ rewrite: its engine-defect findings are all closed below.
     wrap OpenSpout and shim the v4/v5 API split. `.xls` was dropped: OpenSpout cannot read it and
     `mimes:xlsx` is already the precedent in `base-de-dados-api`
     (`PlayerController:25`, `ClassroomController:19`). Tests: `SpreadsheetWriterTest`,
-    `SpreadsheetReaderTest`.
+    `SpreadsheetReaderTest`, run green against **both** majors — PHP 8.2 / openspout v4.28.5 and
+    PHP 8.4 / v5.11.3. The v5 run is what exposed the `Row` constructor break; PHP 8.3 could not
+    be exercised locally (no `pdo_sqlite`), which is one of the reasons the CI matrix exists.
   - 🟠 **The export ignored the listing's filters and ordering.** Fixed: the macro calls
     `$class::luminixQuery($request, $permission)`, the same entry point the index uses. Tests:
     the `q` / `where` / `order_by` / `allowed` cases in `ExportTest`.

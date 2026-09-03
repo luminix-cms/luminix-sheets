@@ -7,6 +7,7 @@ use Luminix\Backend\BackendServiceProvider;
 use Luminix\Backend\Services\ModelFinder;
 use Luminix\Backend\Services\RouteGenerator;
 use Luminix\Frontend\FrontendServiceProvider;
+use Luminix\Frontend\Services\BootService;
 use Luminix\Frontend\Services\ManifestService;
 use Luminix\Sheets\LuminixSheetsServiceProvider;
 use OpenSpout\Common\Entity\Row;
@@ -73,6 +74,7 @@ abstract class TestCase extends TestbenchTestCase
         RouteGenerator::flushReducers();
         ManifestService::flushReducers();
         ModelFinder::flushReducers();
+        BootService::flushReducers();
 
         parent::setUp();
 

@@ -34,6 +34,7 @@ class LuminixSheetsServiceProvider extends ServiceProvider
         $this->registerCommands();
         $this->registerMacros();
         $this->extendManifest();
+        $this->extendBootPayload();
     }
 
     /**
@@ -204,6 +205,41 @@ class LuminixSheetsServiceProvider extends ServiceProvider
                 ...$data,
                 'importable' => ModelSheetResolver::isImportable($class),
                 'exportable' => ModelSheetResolver::isExportable($class),
+            ];
+        });
+    }
+
+    /**
+     * Publishes the accepted import formats in the boot payload, which is where
+     * the npm package `sheets-for-mui-cms` reads them to build the upload field.
+     *
+     * `wireConfig` is the only channel: the payload carries `app`, `auth` and the
+     * manifest, so nothing else in `config/sheets.php` reaches the browser.
+     *
+     * The boot payload belongs to luminix/frontend, which is an optional dependency.
+     */
+    protected function extendBootPayload(): void
+    {
+        $service = '\Luminix\Frontend\Services\BootService';
+
+        if (! class_exists($service)) {
+            return;
+        }
+
+        $service::reducer('wireConfig', function (array $boot): array {
+            $luminix = $boot['luminix'] ?? [];
+
+            return [
+                ...$boot,
+                'luminix' => [
+                    ...$luminix,
+                    'sheets' => [
+                        ...($luminix['sheets'] ?? []),
+                        'import' => [
+                            'formats' => array_values((array) config('luminix.sheets.import.formats', ['xlsx'])),
+                        ],
+                    ],
+                ],
             ];
         });
     }

@@ -52,6 +52,10 @@ composer lint    # pint --test
   screen. An application overrides a line by repeating the key in its own `lang/{locale}.json`
   (the loader merges package paths first, the app last); there is no lang publish tag, since a
   JSON under `lang/vendor` is never read back.
+- **`config/sheets.php` is invisible to the browser except for what `extendBootPayload()`
+  wires.** The boot payload carries `app`, `auth` and the manifest, so the `wireConfig`
+  reducer is the whole channel; today it publishes `luminix.sheets.import.formats`, which
+  `@luminix/sheets-for-mui-cms` turns into the upload field's `accept`.
 - Consequence in `DefaultExportable`: booleans and the date format follow the app locale
   (`__('Yes')`, `__('m/d/Y H:i')`) instead of being hardcoded pt-BR, so the two tests that
   assert `Não` / `04/03/2026` set the locale explicitly.

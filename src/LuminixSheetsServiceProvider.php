@@ -146,17 +146,31 @@ class LuminixSheetsServiceProvider extends ServiceProvider
                 return $routes;
             }
 
+            // The reducer fires for every model luminix/backend routes, so the
+            // attributes have to be checked here. Registering the pair on a
+            // model that carries neither would advertise in `route:list`, in
+            // the manifest and in generated UI an action that only ever 404s.
+            $class = ModelSheetResolver::classForRoutePrefix($prefix);
+
+            if ($class === null) {
+                return $routes;
+            }
+
             $sheets = [];
 
-            $sheets['export'] = [
-                'path' => $prefix.'/export',
-                'method' => 'get',
-            ];
+            if (ModelSheetResolver::isExportable($class)) {
+                $sheets['export'] = [
+                    'path' => $prefix.'/export',
+                    'method' => 'get',
+                ];
+            }
 
-            $sheets['import'] = [
-                'path' => $prefix.'/import',
-                'method' => 'post',
-            ];
+            if (ModelSheetResolver::isImportable($class)) {
+                $sheets['import'] = [
+                    'path' => $prefix.'/import',
+                    'method' => 'post',
+                ];
+            }
 
             return [...$sheets, ...$routes];
         });

@@ -2,7 +2,9 @@
 
 namespace Luminix\Sheets\Support;
 
+use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Luminix\Backend\Facades\Finder;
 use Luminix\Sheets\Contracts\ExportsFromSheet;
 use Luminix\Sheets\Contracts\ImportsFromSheet;
 use Luminix\Sheets\Exportable;
@@ -38,6 +40,26 @@ class ModelSheetResolver
     public static function isExportable(string $modelClass): bool
     {
         return self::attribute($modelClass, Exportable::class) !== null;
+    }
+
+    /**
+     * The model whose route set is being generated, or null when no Luminix
+     * model answers to the prefix.
+     *
+     * `RouteGenerator`'s `modelRoutes` reducer is handed the route array and
+     * the prefix, never the class, so the prefix is the only handle on the
+     * model. It is rebuilt here exactly as `RouteGenerator::make()` derives it
+     * — `Str::slug(Str::plural($alias))` — over the finder's alias map.
+     */
+    public static function classForRoutePrefix(string $prefix): ?string
+    {
+        foreach (Finder::all() as $alias => $class) {
+            if (Str::slug(Str::plural($alias)) === $prefix) {
+                return $class;
+            }
+        }
+
+        return null;
     }
 
     protected static function handler(string $modelClass, string $attributeClass, string $contract): ?object

@@ -153,6 +153,13 @@ rewrite: its engine-defect findings are all closed below.
     read from outside the class fell through `Model::__get()` and became `[]`. Fixed with
     `ReflectionProperty`. Test: `HiddenColumnsTest`, over a fixture whose hidden column is *only*
     in `$sheetsHidden`, so the fallback cannot mask the bug.
+  - 🟠 **Both routes were registered on every model.** Found in use, not in the audit, after the
+    branch was pushed: `RouteGenerator`'s `modelRoutes` reducer fires per model and receives only
+    the route array and the prefix, so the attribute check happened at the controller — the route
+    existed everywhere and answered 404. Fixed: `ModelSheetResolver::classForRoutePrefix()`
+    resolves the model from the prefix through `Finder::all()`, and each route is added only for
+    the attribute the model actually carries. Tests: `RouteTest`, over a model with neither
+    attribute and one marked exportable only.
   - 🟡 The smaller ones: `columns()` / `allowedColumns()` are now honoured (the latter enforced
     by the engine, not just the default handler); `afterExport()` fires once the file exists;
     `export.max_rows` and `export.default_format` are read; the route scan per request is gone

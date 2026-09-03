@@ -5,20 +5,19 @@ namespace {{ namespace }};
 use App\Models\{{ model }};
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 use Luminix\Sheets\Default\DefaultExportable;
 
 class {{ class }} extends DefaultExportable
 {
-    public function __construct()
+    public function __construct(string $modelClass = {{ model }}::class)
     {
-        parent::__construct({{ model }}::class);
+        parent::__construct($modelClass);
     }
 
     /**
-     * Map a model instance to a spreadsheet row.
-     *
-     * Keys become the column headers on the first row.
+     * Map a model instance to a spreadsheet row, keyed by the labels returned
+     * from headers().
      *
      * @return array<string, mixed>
      */
@@ -27,16 +26,26 @@ class {{ class }} extends DefaultExportable
         return parent::map($model);
     }
 
-    // Uncomment to restrict exported columns:
+    // The column labels, in order. Overriding this decides the shape of the
+    // file — an export with no results still carries these headers.
+    // public function headers(): array { return ['Nome', 'E-mail']; }
+
+    // public function widths(): array { return ['Nome' => 30]; }
+
+    // Restrict which model attributes the default headers/map are built from:
     // public function columns(): ?array { return ['name', 'email', 'created_at']; }
 
     // public function query(Builder $query): Builder { return $query->where('active', true); }
 
-    // public function fileName(): string { return 'users_' . now()->format('Y_m_d'); }
+    // public function fileName(): string { return 'usuarios_' . now()->format('Y_m_d'); }
+
+    // public function sheetName(): string { return 'Usuários'; }
 
     // public function format(): string { return 'csv'; } // xlsx | csv | ods
 
-    // public function beforeExport(Collection $rows): void {}
+    // Iterating $rows here loads the whole result set into memory and defeats
+    // the streaming export. Read from it only for a genuine second pass.
+    // public function beforeExport(LazyCollection $rows): void {}
 
     // public function afterExport(): void {}
 }

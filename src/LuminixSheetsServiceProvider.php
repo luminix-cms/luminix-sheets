@@ -3,11 +3,10 @@
 namespace Luminix\Sheets;
 
 use Illuminate\Http\Request;
-use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Luminix\Backend\Controllers\ResourceController;
-use Luminix\Backend\Facades\Finder;
+use Luminix\Backend\Services\RouteGenerator;
 use Luminix\Sheets\Exceptions\ImportValidationException;
 use Luminix\Sheets\Http\Requests\ImportRequest;
 use Luminix\Sheets\Support\ModelSheetResolver;
@@ -17,17 +16,32 @@ class LuminixSheetsServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/../config/sheets.php', 'luminix.sheets');
+        $this->mergeConfigFrom(__DIR__.'/../config/sheets.php', 'luminix.sheets');
+
+        // Registered here, not in boot(): luminix/backend generates its routes
+        // during its own boot(), and every provider's register() runs first.
+        $this->registerRoutes();
     }
 
-    public function boot(Router $router): void
+    public function boot(): void
     {
         $this->publishConfig();
         $this->publishStubs();
         $this->registerCommands();
-        $this->registerRoutes($router);
         $this->registerMacros();
         $this->extendManifest();
+    }
+
+    /**
+     * The permission verb for a sheet action, or null when the action is open.
+     *
+     * luminix/backend's own map (`luminix.backend.security.permissions`) has no
+     * import/export entry, so `inferRequestParameters()` reports no permission
+     * for these routes — which would skip both the gate and the row scope.
+     */
+    public static function permissionFor(string $action): ?string
+    {
+        return config("luminix.sheets.permissions.{$action}");
     }
 
     /*
@@ -36,31 +50,33 @@ class LuminixSheetsServiceProvider extends ServiceProvider
     protected function registerMacros(): void
     {
         /**
-         * POST /luminix-api/{model}/import
+         * POST {prefix}/{models}/import
          * Accepts a multipart/form-data upload with a `file` field.
          */
         ResourceController::macro('import', function () {
-            $request = app(ImportRequest::class);
-
             /** @var ResourceController $this */
             [
-                'class'      => $class,
-                'alias'      => $alias,
-                'permission' => $permission,
+                'class' => $class,
+                'alias' => $alias,
             ] = $this->inferRequestParameters();
 
-            // Permission gate (same pattern as store)
+            $permission = LuminixSheetsServiceProvider::permissionFor('import');
+
+            if (! ModelSheetResolver::isImportable($class)) {
+                abort(404, "Model [{$class}] does not support import.");
+            }
+
             if (
                 $permission
                 && config('luminix.backend.security.gates_enabled', true)
-                && !Gate::allows($permission . '-' . $alias, [null])
+                && ! Gate::allows($permission.'-'.$alias, [null])
             ) {
                 abort(401);
             }
 
-            if (!ModelSheetResolver::isImportable($class)) {
-                abort(404, "Model [{$class}] does not support import.");
-            }
+            // Resolved after the gate: validating first would answer an
+            // unauthorised caller with a 422 describing the upload rules.
+            $request = app(ImportRequest::class);
 
             $handler = ModelSheetResolver::importer($class);
 
@@ -71,13 +87,13 @@ class LuminixSheetsServiceProvider extends ServiceProvider
             }
 
             return response()->json([
-                'message' => $imported->count() . ' record(s) imported successfully.',
-                'count'   => $imported->count(),
+                'message' => $imported->count().' record(s) imported successfully.',
+                'count' => $imported->count(),
             ], 201);
         });
 
         /**
-         * GET /luminix-api/{model}/export
+         * GET {prefix}/{models}/export
          * Returns a streamed file download.
          */
         ResourceController::macro('export', function () {
@@ -85,96 +101,87 @@ class LuminixSheetsServiceProvider extends ServiceProvider
 
             /** @var ResourceController $this */
             [
-                'class'      => $class,
-                'alias'      => $alias,
-                'permission' => $permission,
+                'class' => $class,
+                'alias' => $alias,
             ] = $this->inferRequestParameters();
+
+            $permission = LuminixSheetsServiceProvider::permissionFor('export');
+
+            if (! ModelSheetResolver::isExportable($class)) {
+                abort(404, "Model [{$class}] does not support export.");
+            }
 
             if (
                 $permission
                 && config('luminix.backend.security.gates_enabled', true)
-                && !Gate::allows($permission . '-' . $alias, [null])
+                && ! Gate::allows($permission.'-'.$alias, [null])
             ) {
                 abort(401);
             }
 
-            if (!ModelSheetResolver::isExportable($class)) {
-                abort(404, "Model [{$class}] does not support export.");
-            }
-
             $handler = ModelSheetResolver::exporter($class);
 
-            // Build the base query the same way luminixQuery would, but without
-            // pagination — we want all allowed records.
-            $query = $class::beforeLuminix($request)
-                ->where(function ($q) use ($permission) {
-                    if ($permission) {
-                        $q->allowed($permission);
-                    }
-                })
-                ->afterLuminix($request);
+            // luminixQuery, not a hand-rolled subset: the export must carry the
+            // same q / where / tab / order_by the listing was filtered by.
+            $query = $class::luminixQuery($request, $permission);
 
             return SheetEngine::export($class, $handler, $query);
         });
     }
 
-    protected function registerRoutes(Router $router): void
+    /**
+     * Injects the two routes into the set luminix/backend already generates per
+     * model, so they inherit its prefix, middleware and `luminix.{alias}.{action}`
+     * naming — and land *before* `show` (`{models}/{id}`) and `update`
+     * (POST `{models}/{id}`), which would otherwise swallow them.
+     */
+    protected function registerRoutes(): void
     {
-        if (!config('luminix.sheets.routes.enabled', true)) {
-            return;
-        }
-
-        $prefix = config('luminix.sheets.routes.prefix', 'luminix-api');
-        $middleware = config('luminix.sheets.routes.middleware', ['luminix-api', 'auth:sanctum']);
-
-        $router->group([
-            'prefix' => $prefix,
-            'middleware' => $middleware,
-        ], function (Router $router) {
-            $models = Finder::all();
-
-            foreach ($models as $alias => $class) {
-                if (ModelSheetResolver::isImportable($class)) {
-                    $router->post(
-                        "{$alias}/import",
-                        [ResourceController::class, 'import']
-                    )->name("luminix.{$alias}.import");
-                }
-
-                if (ModelSheetResolver::isExportable($class)) {
-                    $router->get(
-                        "{$alias}/export",
-                        [ResourceController::class, 'export']
-                    )->name("luminix.{$alias}.export");
-                }
+        RouteGenerator::reducer('modelRoutes', function (array $routes, string $prefix) {
+            // Read inside the reducer, not around it: the reducer has to be in
+            // place before luminix/backend boots, which is earlier than the
+            // point where an application's own config is guaranteed to be
+            // merged. Routes are generated later, when the answer is settled.
+            if (! config('luminix.sheets.routes.enabled', true)) {
+                return $routes;
             }
+
+            $sheets = [];
+
+            $sheets['export'] = [
+                'path' => $prefix.'/export',
+                'method' => 'get',
+            ];
+
+            $sheets['import'] = [
+                'path' => $prefix.'/import',
+                'method' => 'post',
+            ];
+
+            return [...$sheets, ...$routes];
         });
     }
 
-
     /**
-     * Hooks into the Luminix model manifest so the frontend knows which models
-     * support import / export.
+     * Adds `importable` / `exportable` to each model's manifest entry so the
+     * frontend knows which models offer the actions.
      *
-     * Each model entry in the manifest will get two boolean flags:
-     *   "importable": true | false
-     *   "exportable": true | false
+     * The manifest belongs to luminix/frontend, which is an optional dependency.
      */
     protected function extendManifest(): void
     {
-        // Luminix fires a `luminix:manifest` event (or uses a macro/hook) to let
-        // packages extend each model's manifest entry. The exact API depends on
-        // the luminix/backend version; the hook below follows the documented
-        // `Finder::extend()` pattern.
-        if (!method_exists(Finder::getFacadeRoot(), 'extend')) {
+        $service = '\Luminix\Frontend\Services\ManifestService';
+
+        if (! class_exists($service)) {
             return;
         }
 
-        Finder::extend(function (string $alias, string $class, array $entry) {
-            $entry['importable'] = ModelSheetResolver::isImportable($class);
-            $entry['exportable'] = ModelSheetResolver::isExportable($class);
-
-            return $entry;
+        $service::reducer('modelManifest', function (array $data, string $class): array {
+            return [
+                ...$data,
+                'importable' => ModelSheetResolver::isImportable($class),
+                'exportable' => ModelSheetResolver::isExportable($class),
+            ];
         });
     }
 
@@ -191,14 +198,14 @@ class LuminixSheetsServiceProvider extends ServiceProvider
     protected function publishConfig(): void
     {
         $this->publishes([
-            __DIR__ . '/../config/sheets.php' => config_path('luminix/sheets.php'),
+            __DIR__.'/../config/sheets.php' => config_path('luminix/sheets.php'),
         ], 'luminix-sheets-config');
     }
 
     protected function publishStubs(): void
     {
         $this->publishes([
-            __DIR__ . '/../stubs' => base_path('stubs/luminix-sheets'),
+            __DIR__.'/../stubs' => base_path('stubs/luminix-sheets'),
         ], 'luminix-sheets-stubs');
     }
 }

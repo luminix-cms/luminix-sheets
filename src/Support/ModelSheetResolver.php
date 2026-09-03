@@ -2,68 +2,85 @@
 
 namespace Luminix\Sheets\Support;
 
-use Luminix\Sheets\Exportable;
-use Luminix\Sheets\Importable;
+use InvalidArgumentException;
 use Luminix\Sheets\Contracts\ExportsFromSheet;
 use Luminix\Sheets\Contracts\ImportsFromSheet;
+use Luminix\Sheets\Exportable;
+use Luminix\Sheets\Importable;
+use ReflectionAttribute;
+use ReflectionClass;
 
 class ModelSheetResolver
 {
     /**
-     * Returns the ImportHandler instance for the given model class, or null
-     * if the model does not have the #[Importable] attribute.
+     * The import handler for the given model class, or null when the model
+     * does not carry the #[Importable] attribute.
      */
     public static function importer(string $modelClass): ?ImportsFromSheet
     {
-        $attribute = self::getAttribute($modelClass, Importable::class);
-
-        if (!$attribute) {
-            return null;
-        }
-
-        /** @var Importable $instance */
-        $instance = $attribute->newInstance();
-
-        return new $instance->handler($modelClass);
+        return self::handler($modelClass, Importable::class, ImportsFromSheet::class);
     }
 
     /**
-     * Returns the ExportHandler instance for the given model class, or null
-     * if the model does not have the #[Exportable] attribute.
+     * The export handler for the given model class, or null when the model
+     * does not carry the #[Exportable] attribute.
      */
     public static function exporter(string $modelClass): ?ExportsFromSheet
     {
-        $attribute = self::getAttribute($modelClass, Exportable::class);
-
-        if (!$attribute) {
-            return null;
-        }
-
-        /** @var Exportable $instance */
-        $instance = $attribute->newInstance();
-
-        return new $instance->handler($modelClass);
+        return self::handler($modelClass, Exportable::class, ExportsFromSheet::class);
     }
 
     public static function isImportable(string $modelClass): bool
     {
-        return self::getAttribute($modelClass, Importable::class) !== null;
+        return self::attribute($modelClass, Importable::class) !== null;
     }
 
     public static function isExportable(string $modelClass): bool
     {
-        return self::getAttribute($modelClass, Exportable::class) !== null;
+        return self::attribute($modelClass, Exportable::class) !== null;
     }
 
-    protected static function getAttribute(string $modelClass, string $attributeClass): ?\ReflectionAttribute
+    protected static function handler(string $modelClass, string $attributeClass, string $contract): ?object
     {
-        if (!class_exists($modelClass)) {
+        $attribute = self::attribute($modelClass, $attributeClass);
+
+        if (! $attribute) {
             return null;
         }
 
-        $reflection = new \ReflectionClass($modelClass);
-        $attributes = $reflection->getAttributes($attributeClass);
+        $handlerClass = $attribute->newInstance()->handler;
 
-        return $attributes[0] ?? null;
+        if (! class_exists($handlerClass) || ! is_subclass_of($handlerClass, $contract)) {
+            throw new InvalidArgumentException(
+                "[{$handlerClass}], declared on [{$modelClass}], must implement [{$contract}]."
+            );
+        }
+
+        return new $handlerClass($modelClass);
+    }
+
+    /**
+     * IS_INSTANCEOF so a project may subclass the attribute; the search walks
+     * up the hierarchy so a base model can mark a whole family importable.
+     */
+    protected static function attribute(string $modelClass, string $attributeClass): ?ReflectionAttribute
+    {
+        if (! class_exists($modelClass)) {
+            return null;
+        }
+
+        $reflection = new ReflectionClass($modelClass);
+
+        while ($reflection) {
+            $attributes = $reflection->getAttributes($attributeClass, ReflectionAttribute::IS_INSTANCEOF);
+
+            if (isset($attributes[0])) {
+                return $attributes[0];
+            }
+
+            $reflection = $reflection->getParentClass();
+        }
+
+        return null;
     }
 }

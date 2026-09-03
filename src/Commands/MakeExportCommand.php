@@ -15,19 +15,19 @@ class MakeExportCommand extends GeneratorCommand
 
     protected function getStub(): string
     {
-        return __DIR__ . '/../../stubs/export.stub';
+        return __DIR__.'/../../stubs/export.stub';
     }
 
     protected function getDefaultNamespace($rootNamespace): string
     {
-        return $rootNamespace . '\\Sheets\\Export';
+        return $rootNamespace.'\\Sheets\\Export';
     }
 
     protected function getPath($name): string
     {
         $name = Str::replaceFirst($this->rootNamespace(), '', $name);
 
-        return app_path(str_replace('\\', '/', $name) . '.php');
+        return app_path(str_replace('\\', '/', $name).'.php');
     }
 
     protected function buildClass($name): string

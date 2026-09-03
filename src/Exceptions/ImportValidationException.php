@@ -26,7 +26,7 @@ class ImportValidationException extends RuntimeException
         $this->errors = $errors;
 
         parent::__construct(
-            $message ?: 'The import file contains ' . count($errors) . ' row(s) with validation errors.'
+            $message ?: 'The import file contains '.count($errors).' row(s) with validation errors.'
         );
     }
 

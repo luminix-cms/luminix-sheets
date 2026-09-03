@@ -5,6 +5,7 @@ namespace Luminix\Sheets\Default;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Luminix\Sheets\Contracts\ImportsFromSheet;
 use Luminix\Sheets\Support\HiddenColumns;
 
@@ -20,25 +21,19 @@ class DefaultImportable implements ImportsFromSheet
     /**
      * Maps a spreadsheet row to model attributes.
      *
-     * Only keys present in the model's fillable array (and not hidden for import)
-     * are kept. All other keys are silently discarded.
+     * Headers are normalised back to attribute names ("First Name" → first_name).
+     * Filtering against allowedColumns() is the engine's job, so a handler that
+     * overrides only one of the two still gets both applied.
      */
     public function map(array $row, int $rowIndex): ?array
     {
-        /** @var Model $instance */
-        $instance = new $this->modelClass;
-
-        $allowed = $this->resolveAllowedColumns($instance);
-
         $mapped = [];
+
         foreach ($row as $column => $value) {
-            $column = $this->normalizeKey($column);
-            if (in_array($column, $allowed, true)) {
-                $mapped[$column] = $value === '' ? null : $value;
-            }
+            $mapped[$this->normalizeKey((string) $column)] = $value === '' ? null : $value;
         }
 
-        return empty($mapped) ? null : $mapped;
+        return $mapped === [] ? null : $mapped;
     }
 
     /**
@@ -74,30 +69,25 @@ class DefaultImportable implements ImportsFromSheet
         return 1;
     }
 
+    /**
+     * Fillable minus everything hidden for import, including the primary key.
+     */
     public function allowedColumns(): ?array
     {
-        return null; // resolved dynamically from the model
-    }
+        /** @var Model $instance */
+        $instance = new $this->modelClass;
 
-    // Helpers
-    protected function resolveAllowedColumns(Model $instance): array
-    {
-        if ($this->allowedColumns() !== null) {
-            return $this->allowedColumns();
-        }
-
-        $fillable = $instance->getFillable();
-        $hidden   = HiddenColumns::forImport($instance);
-
-        return array_values(array_diff($fillable, $hidden));
+        return array_values(array_diff(
+            $instance->getFillable(),
+            HiddenColumns::forImport($instance)
+        ));
     }
 
     /**
-     * Normalise a header string to snake_case so it matches attribute names.
-     * e.g. "First Name" → "first_name"
+     * "First Name" → "first_name"
      */
     protected function normalizeKey(string $key): string
     {
-        return str($key)->lower()->replace(' ', '_')->toString();
+        return Str::of($key)->trim()->replace('*', '')->snake()->toString();
     }
 }

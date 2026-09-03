@@ -10,14 +10,19 @@
         }
     ],
     "require": {
-        "php": "^8.1",
-        "laravel/framework": "^10.0|^11.0",
-        "luminix/backend": "*",
-        "phpoffice/phpspreadsheet": "*"
+        "php": "^8.2",
+        "laravel/framework": "^11.0|^12.0|^13.0",
+        "luminix/backend": "^1.0",
+        "openspout/openspout": "^4.28|^5.3"
     },
     "require-dev": {
-        "orchestra/testbench": "^8.0|^9.0",
-        "pestphp/pest": "^2.0"
+        "laravel/pint": "^1.18",
+        "luminix/frontend": "^1.0",
+        "orchestra/testbench": "^9.0|^10.0",
+        "phpunit/phpunit": "^11.0|^12.0"
+    },
+    "suggest": {
+        "luminix/frontend": "Exposes the importable/exportable flags in the model manifest."
     },
     "autoload": {
         "psr-4": {
@@ -26,8 +31,24 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Luminix\\Sheets\\Tests\\": "tests/"
+            "Workbench\\App\\": "workbench/app/",
+            "Workbench\\Database\\Factories\\": "workbench/database/factories/",
+            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
         }
+    },
+    "scripts": {
+        "test": "@php vendor/bin/testbench package:test",
+        "test:coverage": "@php vendor/bin/testbench package:test --coverage",
+        "lint": "@php vendor/bin/pint --test",
+        "format": "@php vendor/bin/pint",
+        "post-autoload-dump": [
+            "@clear",
+            "@prepare"
+        ],
+        "clear": "@php vendor/bin/testbench package:purge-skeleton --ansi",
+        "prepare": "@php vendor/bin/testbench package:discover --ansi",
+        "build": "@php vendor/bin/testbench workbench:build --ansi",
+        "artisan": "@php vendor/bin/testbench"
     },
     "extra": {
         "laravel": {

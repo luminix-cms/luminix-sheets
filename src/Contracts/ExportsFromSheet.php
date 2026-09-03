@@ -4,22 +4,39 @@ namespace Luminix\Sheets\Contracts;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 
 interface ExportsFromSheet
 {
     /**
      * Columns to include in the exported file.
-     * By default, all non-hidden fillable columns are exported.
-     * Return null to use the default column resolution.
+     * Return null to resolve them from the model's fillable minus its hidden ones.
      *
      * @return string[]|null
      */
     public function columns(): ?array;
 
     /**
-     * Map a single model instance to a row array.
-     * Keys become column headers (on first row).
+     * Column labels, in order, written as the first row.
+     *
+     * This — not the first mapped row — decides the shape of the file, so an
+     * export with zero results still carries a header.
+     *
+     * @return string[]
+     */
+    public function headers(): array;
+
+    /**
+     * Column widths, keyed by the labels returned from headers().
+     * Missing entries fall back to a default width.
+     *
+     * @return array<string, int>
+     */
+    public function widths(): array;
+
+    /**
+     * Map a single model instance to a row, keyed by the labels from headers().
+     * A key absent from headers() is not written; a header absent here is blank.
      *
      * @return array<string, mixed>
      */
@@ -27,7 +44,7 @@ interface ExportsFromSheet
 
     /**
      * Apply additional constraints to the base query before exporting.
-     * Receives the already-scoped query (permissions applied).
+     * Receives the already-scoped query (permissions and listing filters applied).
      */
     public function query(Builder $query): Builder;
 
@@ -37,20 +54,30 @@ interface ExportsFromSheet
     public function fileName(): string;
 
     /**
+     * The worksheet tab name inside the file.
+     */
+    public function sheetName(): string;
+
+    /**
      * The disk format for the exported file.
      * Supported values: 'xlsx', 'csv', 'ods'
      */
     public function format(): string;
 
     /**
-     * Called once before the export file is written.
+     * Called once before the first row is written.
      *
-     * @param  Collection<int, Model>  $rows
+     * Receives the lazy result set. Iterating it here loads every row into
+     * memory and defeats the streaming export — read from it only when the
+     * handler genuinely needs a second pass.
+     *
+     * @param  LazyCollection<int, Model>  $rows
      */
-    public function beforeExport(Collection $rows): void;
+    public function beforeExport(LazyCollection $rows): void;
 
     /**
-     * Called once after the export file has been written and is ready to stream.
+     * Called once after the file has been written to disk and before the
+     * response starts streaming it.
      */
     public function afterExport(): void;
 }

@@ -9,9 +9,9 @@ use Luminix\Sheets\Default\DefaultImportable;
 
 class {{ class }} extends DefaultImportable
 {
-    public function __construct()
+    public function __construct(string $modelClass = {{ model }}::class)
     {
-        parent::__construct({{ model }}::class);
+        parent::__construct($modelClass);
     }
 
     /**
@@ -19,7 +19,7 @@ class {{ class }} extends DefaultImportable
      *
      * Returning null skips the row entirely.
      *
-     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $row  Keyed by the header labels
      */
     public function map(array $row, int $rowIndex): ?array
     {
@@ -27,7 +27,8 @@ class {{ class }} extends DefaultImportable
     }
 
     /**
-     * Per-row validation rules.
+     * Per-row validation rules. A failing row is reported with its number in
+     * the sheet and nothing is persisted.
      *
      * @return array<string, mixed>
      */
@@ -38,14 +39,18 @@ class {{ class }} extends DefaultImportable
         ];
     }
 
+    // public function messages(): array { return []; }
+
     // public function beforeImport(UploadedFile $file): void {}
 
     // public function afterImport(Collection $imported): void {}
 
     // public function useTransaction(): bool { return true; }
 
+    // Rows above this one are ignored; this one is the header.
     // public function headingRow(): int { return 1; }
 
-    // Uncomment and return an array to restrict importable columns:
+    // Columns accepted from the file. Defaults to fillable minus the hidden
+    // ones and the primary key.
     // public function allowedColumns(): ?array { return ['name', 'email']; }
 }

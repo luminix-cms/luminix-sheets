@@ -4,7 +4,7 @@ namespace Luminix\Sheets\Default;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 use Illuminate\Support\Str;
 use Luminix\Sheets\Contracts\ExportsFromSheet;
 use Luminix\Sheets\Support\HiddenColumns;
@@ -12,6 +12,9 @@ use Luminix\Sheets\Support\HiddenColumns;
 class DefaultExportable implements ExportsFromSheet
 {
     protected string $modelClass;
+
+    /** @var array<string, string>|null  Label => attribute name */
+    protected ?array $resolved = null;
 
     public function __construct(string $modelClass)
     {
@@ -26,21 +29,28 @@ class DefaultExportable implements ExportsFromSheet
         return null;
     }
 
+    public function headers(): array
+    {
+        return array_keys($this->labelled());
+    }
+
+    public function widths(): array
+    {
+        return [];
+    }
+
     /**
-     * Maps a model to an associative row array.
+     * Maps a model to a row keyed by the labels from headers().
      *
-     * Only non-hidden fillable attributes are included by default.
-     * Column headers are the human-readable version of each attribute name
-     * (snake_case → "Title Case").
+     * Only non-hidden fillable attributes are included by default. Labels are
+     * the human-readable version of each attribute name (snake_case → "Title Case").
      */
     public function map(Model $model): array
     {
-        $columns = $this->resolveColumns($model);
-
         $row = [];
-        foreach ($columns as $column) {
-            $header       = Str::of($column)->replace('_', ' ')->title()->toString();
-            $row[$header] = $model->getAttribute($column);
+
+        foreach ($this->labelled() as $label => $column) {
+            $row[$label] = $this->value($model, $column);
         }
 
         return $row;
@@ -56,16 +66,20 @@ class DefaultExportable implements ExportsFromSheet
 
     public function fileName(): string
     {
-        return Str::of($this->modelClass)->classBasename()->snake()->plural()->toString()
-            . '_' . now()->format('Y_m_d_His');
+        return $this->plural().'_'.now()->format('Y_m_d_His');
+    }
+
+    public function sheetName(): string
+    {
+        return Str::of($this->plural())->replace('_', ' ')->title()->toString();
     }
 
     public function format(): string
     {
-        return 'xlsx';
+        return (string) config('luminix.sheets.export.default_format', 'xlsx');
     }
 
-    public function beforeExport(Collection $rows): void
+    public function beforeExport(LazyCollection $rows): void
     {
         //
     }
@@ -76,6 +90,51 @@ class DefaultExportable implements ExportsFromSheet
     }
 
     // Helpers
+
+    /**
+     * @return array<string, string> Label => attribute name
+     */
+    protected function labelled(): array
+    {
+        if ($this->resolved !== null) {
+            return $this->resolved;
+        }
+
+        /** @var Model $instance */
+        $instance = new $this->modelClass;
+
+        $labelled = [];
+
+        foreach ($this->resolveColumns($instance) as $column) {
+            $labelled[$this->label($column)] = $column;
+        }
+
+        return $this->resolved = $labelled;
+    }
+
+    protected function label(string $column): string
+    {
+        return Str::of($column)->replace('_', ' ')->title()->toString();
+    }
+
+    /**
+     * Dates and enums reach the writer as strings; anything else keeps the raw
+     * value, which the writer casts. Arrays would otherwise stringify to "Array".
+     */
+    protected function value(Model $model, string $column): mixed
+    {
+        $value = $model->getAttribute($column);
+
+        return match (true) {
+            $value instanceof \DateTimeInterface => $value->format('d/m/Y H:i'),
+            $value instanceof \BackedEnum => $value->value,
+            $value instanceof \UnitEnum => $value->name,
+            is_bool($value) => $value ? 'Sim' : 'Não',
+            is_array($value) => json_encode($value, JSON_UNESCAPED_UNICODE),
+            default => $value,
+        };
+    }
+
     protected function resolveColumns(Model $model): array
     {
         if ($this->columns() !== null) {
@@ -83,8 +142,13 @@ class DefaultExportable implements ExportsFromSheet
         }
 
         $fillable = $model->getFillable();
-        $hidden   = HiddenColumns::forExport($model);
+        $hidden = HiddenColumns::forExport($model);
 
         return array_values(array_diff($fillable, $hidden));
+    }
+
+    protected function plural(): string
+    {
+        return Str::of($this->modelClass)->classBasename()->snake()->plural()->toString();
     }
 }

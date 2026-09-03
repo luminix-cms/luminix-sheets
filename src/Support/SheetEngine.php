@@ -11,12 +11,6 @@ use Illuminate\Support\Facades\Validator;
 use Luminix\Sheets\Contracts\ExportsFromSheet;
 use Luminix\Sheets\Contracts\ImportsFromSheet;
 use Luminix\Sheets\Exceptions\ImportValidationException;
-use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
-use PhpOffice\PhpSpreadsheet\IOFactory;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Writer\Csv;
-use PhpOffice\PhpSpreadsheet\Writer\Ods;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SheetEngine
@@ -25,9 +19,7 @@ class SheetEngine
      * Process an uploaded spreadsheet file and persist rows to the database.
      *
      * @param  string  $modelClass  Fully-qualified Eloquent model class
-     * @param  ImportsFromSheet  $handler
-     * @param  UploadedFile  $file
-     * @return Collection<int, Model>  The successfully imported models
+     * @return Collection<int, Model> The successfully imported models
      *
      * @throws ImportValidationException
      */
@@ -36,42 +28,58 @@ class SheetEngine
         ImportsFromSheet $handler,
         UploadedFile $file
     ): Collection {
-
         $handler->beforeImport($file);
 
-        $spreadsheet = IOFactory::load($file->getRealPath());
-        $sheet = $spreadsheet->getActiveSheet();
-        $rows = $sheet->toArray(null, true, true, false);
-
-        // Determine header row index (0-based internal index)
         $headingRow = max(1, $handler->headingRow());
-        $headerIndex = $headingRow - 1;
+        $format = strtolower($file->getClientOriginalExtension() ?: 'xlsx');
 
-        // Skip rows before the heading
-        $rows = array_values($rows);
-        $headers = array_map('strval', $rows[$headerIndex] ?? []);
-
-        $dataRows = array_slice($rows, $headingRow); // everything after the header
-
+        $headers = null;
         $errors = [];
         $mapped = [];
+        $index = 0;
 
-        foreach ($dataRows as $rowIndex => $raw) {
-            $row = array_combine($headers, $raw);
+        foreach (SpreadsheetReader::rows($file->getRealPath(), $format) as $number => $raw) {
+            if ($number < $headingRow) {
+                continue;
+            }
 
-            $data = $handler->map($row, $rowIndex);
+            if ($number === $headingRow) {
+                $headers = array_map(
+                    fn ($header) => (string) $header,
+                    $raw
+                );
+
+                continue;
+            }
+
+            $row = static::combine($headers ?? [], $raw);
+
+            $data = $handler->map($row, $index++);
 
             if ($data === null) {
-                continue; // handler explicitly skipped this row
+                continue;
+            }
+
+            // Enforced here, not only inside the default handler: a handler
+            // written straight against the contract would otherwise bypass it.
+            $allowed = $handler->allowedColumns();
+
+            if ($allowed !== null) {
+                $data = array_intersect_key($data, array_flip($allowed));
+            }
+
+            if ($data === []) {
+                continue;
             }
 
             $rules = $handler->rules();
 
-            if (!empty($rules)) {
+            if (! empty($rules)) {
                 $validator = Validator::make($data, $rules, $handler->messages());
 
                 if ($validator->fails()) {
-                    $errors[$rowIndex + $headingRow + 1] = $validator->errors()->toArray();
+                    $errors[$number] = $validator->errors()->toArray();
+
                     continue;
                 }
             }
@@ -79,11 +87,11 @@ class SheetEngine
             $mapped[] = $data;
         }
 
-        if (!empty($errors)) {
+        if (! empty($errors)) {
             throw new ImportValidationException($errors);
         }
 
-        $imported = new Collection();
+        $imported = new Collection;
 
         $persist = function () use ($modelClass, $mapped, &$imported) {
             foreach ($mapped as $attributes) {
@@ -109,8 +117,10 @@ class SheetEngine
     /**
      * Build a streamed download response for the given query + handler.
      *
-     * @param  string  $modelClass
-     * @param  ExportsFromSheet  $handler
+     * The file is written to a temporary path *before* the response is
+     * returned: a failure halfway through the batches surfaces as a 500
+     * rather than a 200 carrying a truncated attachment.
+     *
      * @param  Builder  $query  Already permission-scoped base query
      */
     public static function export(
@@ -118,90 +128,108 @@ class SheetEngine
         ExportsFromSheet $handler,
         Builder $query
     ): StreamedResponse {
-
-        $query = $handler->query($query);
-        $rows = $query->get();
-
-        $handler->beforeExport($rows);
-
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-
-        $headers = null;
-        $rowNum = 1;
-
-        foreach ($rows as $model) {
-            $mapped = $handler->map($model);
-
-            // Header (primeira linha)
-            if ($headers === null) {
-                $headers = array_keys($mapped);
-
-                $col = 1;
-                foreach ($headers as $header) {
-                    $columnLetter = Coordinate::stringFromColumnIndex($col);
-                    $sheet->setCellValue($columnLetter . '1', $header);
-                    $col++;
-                }
-
-                // Bold no header
-                $sheet->getStyle('1:1')->getFont()->setBold(true);
-
-                $rowNum = 2;
-            }
-
-            // Dados
-            $col = 1;
-            foreach ($mapped as $value) {
-                $columnLetter = Coordinate::stringFromColumnIndex($col);
-                $sheet->setCellValue($columnLetter . $rowNum, $value);
-                $col++;
-            }
-
-            $rowNum++;
-        }
-
-        // Auto-size columns
-        if ($headers !== null) {
-            foreach (range(1, count($headers)) as $colIndex) {
-                $sheet->getColumnDimensionByColumn($colIndex)->setAutoSize(true);
-            }
-        }
-
         $format = strtolower($handler->format());
-        $fileName = $handler->fileName() . '.' . $format;
-        $mimeType = self::mimeType($format);
+        $fileName = $handler->fileName().'.'.$format;
+
+        $path = tempnam(sys_get_temp_dir(), 'luminix-sheet-');
+
+        try {
+            static::write($path, $format, $handler, $query);
+        } catch (\Throwable $e) {
+            @unlink($path);
+
+            throw $e;
+        }
 
         $handler->afterExport();
 
-        return response()->streamDownload(function () use ($spreadsheet, $format) {
-            $writer = self::makeWriter($spreadsheet, $format);
-            $writer->save('php://output');
-        }, $fileName, [
-            'Content-Type'        => $mimeType,
-            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
-        ]);
+        return response()->stream(
+            function () use ($path) {
+                readfile($path);
+                @unlink($path);
+            },
+            200,
+            [
+                'Content-Type' => SpreadsheetWriter::mimeType($format),
+                'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
+                'Cache-Control' => 'no-cache, no-store, must-revalidate',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
+            ]
+        );
     }
 
-    // -------------------------------------------------------------------------
-    // Internals
-    // -------------------------------------------------------------------------
+    /**
+     * Streams the query into the file one chunk at a time. Nothing larger than
+     * a single chunk is ever held in memory.
+     */
+    protected static function write(
+        string $path,
+        string $format,
+        ExportsFromSheet $handler,
+        Builder $query
+    ): void {
+        $chunk = (int) config('luminix.sheets.export.chunk_size', 1000);
+        $maxRows = config('luminix.sheets.export.max_rows');
 
-    protected static function makeWriter(Spreadsheet $spreadsheet, string $format): object
-    {
-        return match ($format) {
-            'csv' => new Csv($spreadsheet),
-            'ods' => new Ods($spreadsheet),
-            default => new Xlsx($spreadsheet),
-        };
+        $writer = (new SpreadsheetWriter($format))->openToFile($path);
+        $writer->name($handler->sheetName());
+
+        $rows = $handler->query($query)->lazy(max(1, $chunk));
+
+        $handler->beforeExport($rows);
+
+        // The header comes from the handler, not from the first mapped row, so
+        // an export with no results still produces a readable file.
+        $headers = $handler->headers();
+        $widths = $handler->widths();
+
+        $writer->writeHeader(array_combine(
+            $headers,
+            array_map(fn ($header) => $widths[$header] ?? 20, $headers)
+        ));
+
+        $written = 0;
+
+        foreach ($rows as $model) {
+            if ($maxRows !== null && $written >= (int) $maxRows) {
+                break;
+            }
+
+            $mapped = $handler->map($model);
+
+            $writer->writeRow(array_map(
+                fn ($header) => $mapped[$header] ?? null,
+                $headers
+            ));
+
+            $written++;
+        }
+
+        $writer->close();
     }
 
-    protected static function mimeType(string $format): string
+    /**
+     * Pairs a data row with the header row, tolerating the ragged rows real
+     * spreadsheets produce: a short row pads with null, a long one is cut.
+     * `array_combine` would fatal on both.
+     *
+     * @param  array<int, string>  $headers
+     * @param  array<int, mixed>  $raw
+     * @return array<string, mixed>
+     */
+    protected static function combine(array $headers, array $raw): array
     {
-        return match ($format) {
-            'csv' => 'text/csv',
-            'ods' => 'application/vnd.oasis.opendocument.spreadsheet',
-            default => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        };
+        $row = [];
+
+        foreach (array_values($headers) as $position => $header) {
+            if ($header === '') {
+                continue;
+            }
+
+            $row[$header] = $raw[$position] ?? null;
+        }
+
+        return $row;
     }
 }

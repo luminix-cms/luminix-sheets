@@ -15,12 +15,12 @@ class MakeImportCommand extends GeneratorCommand
 
     protected function getStub(): string
     {
-        return __DIR__ . '/../../stubs/import.stub';
+        return __DIR__.'/../../stubs/import.stub';
     }
 
     protected function getDefaultNamespace($rootNamespace): string
     {
-        return $rootNamespace . '\\Sheets\\Import';
+        return $rootNamespace.'\\Sheets\\Import';
     }
 
     /**
@@ -30,7 +30,7 @@ class MakeImportCommand extends GeneratorCommand
     {
         $name = Str::replaceFirst($this->rootNamespace(), '', $name);
 
-        return app_path(str_replace('\\', '/', $name) . '.php');
+        return app_path(str_replace('\\', '/', $name).'.php');
     }
 
     protected function buildClass($name): string

@@ -81,7 +81,7 @@ class SpreadsheetWriterTest extends TestCase
         $this->files[] = $path;
 
         $writer = (new SpreadsheetWriter('csv'))->openToFile($path);
-        $writer->writeHeader(['A' => 10, 'B' => 10]);
+        $writer->writeHeader(['A', 'B'], ['A' => 10, 'B' => 10]);
         $writer->writeRow([null, 'x']);
         $writer->close();
 
@@ -97,7 +97,7 @@ class SpreadsheetWriterTest extends TestCase
 
         $writer = (new SpreadsheetWriter('xlsx'))->openToFile($path);
         $writer->name('Relatório');
-        $writer->writeHeader(['A' => 10]);
+        $writer->writeHeader(['A'], ['A' => 10]);
         $writer->close();
 
         $this->assertSame('Relatório', $this->readSheetName(file_get_contents($path)));
@@ -113,7 +113,7 @@ class SpreadsheetWriterTest extends TestCase
 
         $writer = (new SpreadsheetWriter($format))->openToFile($path);
         $writer->name('Teste');
-        $writer->writeHeader($header);
+        $writer->writeHeader(array_keys($header), $header);
         $writer->writeRow(['Ana', '007']);
         $writer->close();
 

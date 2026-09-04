@@ -259,13 +259,9 @@ class SheetEngine
 
         // The header comes from the handler, not from the first mapped row, so
         // an export with no results still produces a readable file.
-        $headers = $handler->headers();
-        $widths = $handler->widths();
+        $headers = array_values($handler->headers());
 
-        $writer->writeHeader(array_combine(
-            $headers,
-            array_map(fn ($header) => $widths[$header] ?? 20, $headers)
-        ));
+        $writer->writeHeader($headers, $handler->widths());
 
         $written = 0;
 

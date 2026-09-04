@@ -248,6 +248,24 @@ class ExportTest extends TestCase
     }
 
     /**
+     * A handler is free to repeat a label. It used to cost a column: the widths
+     * were keyed by label, so two identical ones collapsed into a single header
+     * cell while every data row still carried both — a file whose header is
+     * narrower than its body.
+     */
+    public function test_a_repeated_label_still_writes_its_own_column(): void
+    {
+        InvoiceExport::$labels = ['Total', 'Total'];
+
+        Invoice::create(['number' => 'NF-1', 'customer' => 'Acme', 'total' => 1]);
+
+        $rows = $this->export('/luminix-api/invoices/export');
+
+        $this->assertSame(['Total', 'Total'], $rows[0]);
+        $this->assertCount(count($rows[0]), $rows[1]);
+    }
+
+    /**
      * The happy path leaves nothing behind either: the scratch file is removed
      * once the response has finished streaming it.
      */

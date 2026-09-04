@@ -50,21 +50,28 @@ class SpreadsheetWriter
     }
 
     /**
-     * @param  array<string, int>  $widths  Header label => column width
+     * Labels and widths travel separately, and deliberately: keyed by label, a
+     * handler that repeats one would lose a column here while its data rows
+     * still carried both.
+     *
+     * @param  array<int, string>  $headers  Column labels, in order
+     * @param  array<string, int>  $widths  Label => width; missing ones default
      */
-    public function writeHeader(array $widths): static
+    public function writeHeader(array $headers, array $widths = []): static
     {
-        $this->sheet(function ($sheet) use ($widths) {
+        $headers = array_values($headers);
+
+        $this->sheet(function ($sheet) use ($headers, $widths) {
             $position = 1;
 
-            foreach ($widths as $width) {
-                $sheet->setColumnWidth((float) $width, $position++);
+            foreach ($headers as $header) {
+                $sheet->setColumnWidth((float) ($widths[$header] ?? 20), $position++);
             }
 
             $this->freezeHeader($sheet);
         });
 
-        $this->writer->addRow($this->row(array_keys($widths), $this->boldStyle()));
+        $this->writer->addRow($this->row($headers, $this->boldStyle()));
 
         return $this;
     }

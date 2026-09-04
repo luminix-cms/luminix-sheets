@@ -18,6 +18,9 @@ class InvoiceExport extends DefaultExportable
     /** When set, map() throws once it reaches this 1-based row. */
     public static ?int $throwOnRow = null;
 
+    /** When set, replaces the labels headers() declares. */
+    public static ?array $labels = null;
+
     private int $mapped = 0;
 
     public static function reset(): void
@@ -25,11 +28,12 @@ class InvoiceExport extends DefaultExportable
         static::$calls = [];
         static::$onlyCustomer = null;
         static::$throwOnRow = null;
+        static::$labels = null;
     }
 
     public function headers(): array
     {
-        return ['Número', 'Cliente', 'Total'];
+        return static::$labels ?? ['Número', 'Cliente', 'Total'];
     }
 
     public function widths(): array

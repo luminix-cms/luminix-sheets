@@ -5,10 +5,19 @@
 # build, tag or ship. `dusk` is n/a — no UI. No MySQL service either: the suite
 # runs on sqlite in memory (phpunit.xml).
 #
-# The PHP matrix is the point. `openspout/openspout` resolves to v4 on 8.2 and
-# to v5 on 8.3+, and the two majors disagree on `Row::__construct` and on the
-# fluent style setters. Both legs must stay green or the declared
-# `^4.28|^5.3` constraint is a lie. See CLAUDE.md § Workflow.
+# The matrix is the point, and it carries two constraints at once.
+#
+# `openspout/openspout` resolves to v4 on PHP 8.2 and to v5 on 8.3+, and the two
+# majors disagree on `Row::__construct` and on the fluent style setters.
+#
+# `laravel/framework` declares three majors, and nothing picks the older two on
+# its own: `composer update` always resolves the newest the constraint allows,
+# so 11 and 13 would never run. Each leg pins one, together with the testbench
+# major that supports it — 11 needs testbench ^9, 12 ^10, 13 ^11. Laravel 13
+# requires PHP ^8.3, which is why the pairing runs in this direction.
+#
+# Every leg must stay green or the declared constraints are a lie.
+# See CLAUDE.md § Workflow.
 name: Checks
 
 on:
@@ -21,17 +30,23 @@ on:
 
 jobs:
   checks:
-    name: PHP ${{ matrix.php }}
+    name: PHP ${{ matrix.php }} · Laravel ${{ matrix.laravel }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - php: '8.2'   # openspout v4
+            laravel: '11'
+            testbench: '^9.0'
             coverage: none
           - php: '8.3'   # openspout v5
+            laravel: '12'
+            testbench: '^10.0'
             coverage: none
           - php: '8.4'   # openspout v5, and where the coverage figure comes from
+            laravel: '13'
+            testbench: '^11.0'
             coverage: pcov
     steps:
       - uses: actions/checkout@v7
@@ -46,10 +61,15 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: composer-${{ runner.os }}-php${{ matrix.php }}-${{ hashFiles('composer.json') }}
-          restore-keys: composer-${{ runner.os }}-php${{ matrix.php }}-
+          key: composer-${{ runner.os }}-php${{ matrix.php }}-laravel${{ matrix.laravel }}-${{ hashFiles('composer.json') }}
+          restore-keys: composer-${{ runner.os }}-php${{ matrix.php }}-laravel${{ matrix.laravel }}-
 
-      - run: composer update --prefer-dist --no-progress --no-interaction
+      - run: >
+          composer update --prefer-dist --no-progress --no-interaction
+          --with="laravel/framework:^${{ matrix.laravel }}.0"
+          --with="orchestra/testbench:${{ matrix.testbench }}"
+      # Fails the leg loudly if the pin silently resolved to another major.
+      - run: composer show laravel/framework | grep -E '^versions.*v${{ matrix.laravel }}\.'
       # Cheapest first: a formatting error fails in seconds.
       - run: vendor/bin/pint --test
       - run: composer test

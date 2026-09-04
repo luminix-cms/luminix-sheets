@@ -116,6 +116,15 @@ GET /luminix-api/players/export?q=ana&order_by=score:desc
   }
   ```
 
+Também respondem `422`, com `message` e sem `errors`: um arquivo que não é uma
+planilha, um que o leitor não consegue abrir, e um acima de `import.max_rows`.
+
+O upload é conferido pelo nome **e** pelo conteúdo. Como um `csv` não tem
+assinatura própria — a detecção o chama de `text/plain` — e um `xlsx` é um zip,
+o pacote confere contra o que a detecção realmente devolve para cada formato
+habilitado; o que passa disso e não for planilha morre no leitor, com o mesmo
+`422`.
+
 Por padrão a importação inteira roda em uma transação: uma linha que falha no
 banco desfaz todas as anteriores.
 

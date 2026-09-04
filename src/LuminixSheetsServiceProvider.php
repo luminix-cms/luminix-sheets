@@ -9,6 +9,7 @@ use Luminix\Backend\Controllers\ResourceController;
 use Luminix\Backend\Services\RouteGenerator;
 use Luminix\Sheets\Exceptions\ImportRowLimitException;
 use Luminix\Sheets\Exceptions\ImportValidationException;
+use Luminix\Sheets\Exceptions\UnreadableSheetException;
 use Luminix\Sheets\Http\Requests\ImportRequest;
 use Luminix\Sheets\Support\ModelSheetResolver;
 use Luminix\Sheets\Support\SheetEngine;
@@ -88,7 +89,7 @@ class LuminixSheetsServiceProvider extends ServiceProvider
 
             try {
                 $imported = SheetEngine::import($class, $handler, $request->file('file'));
-            } catch (ImportValidationException|ImportRowLimitException $e) {
+            } catch (ImportValidationException|ImportRowLimitException|UnreadableSheetException $e) {
                 return response()->json($e->toArray(), 422);
             }
 

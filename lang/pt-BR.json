@@ -8,6 +8,7 @@
     "Only :formats files are accepted. Re-save the file in one of these formats and try again.": "Somente arquivos :formats são aceitos. Salve o arquivo em um desses formatos e tente novamente.",
     "The uploaded file must not exceed :max KB.": "O arquivo enviado não pode ultrapassar :max KB.",
     "The import accepts at most :max rows per file.": "A importação aceita no máximo :max linhas por arquivo.",
+    "The file could not be read as a spreadsheet. Re-save it and try again.": "Não foi possível ler o arquivo como planilha. Salve-o novamente e tente de novo.",
     "{1} The import file contains :count row with validation errors.|[2,*] The import file contains :count rows with validation errors.": "{1} O arquivo de importação contém :count linha com erros de validação.|[2,*] O arquivo de importação contém :count linhas com erros de validação.",
 
     "Yes": "Sim",

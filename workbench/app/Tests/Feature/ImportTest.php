@@ -2,6 +2,7 @@
 
 namespace Workbench\App\Tests\Feature;
 
+use Illuminate\Http\UploadedFile;
 use Workbench\App\Models\Invoice;
 use Workbench\App\Models\Player;
 use Workbench\App\Providers\WorkbenchServiceProvider;
@@ -66,6 +67,25 @@ class ImportTest extends TestCase
             ->assertJsonValidationErrors('file');
 
         $this->assertSame(0, Player::count());
+    }
+
+    /**
+     * A csv has no signature of its own — content sniffing calls it text/plain.
+     * A `mimes` rule listing the literal format would refuse every legitimate
+     * one, so a project that enables csv must still be able to upload it.
+     */
+    public function test_an_accepted_csv_passes_the_upload_rules(): void
+    {
+        config()->set('luminix.sheets.import.formats', ['xlsx', 'csv']);
+
+        $file = $this->makeSheet([['Name', 'Registration'], ['Ana', '007']], 'csv');
+
+        $this->actingAs($this->user())
+            ->json('POST', '/luminix-api/players/import', ['file' => $file])
+            ->assertStatus(201)
+            ->assertJson(['count' => 1]);
+
+        $this->assertSame('007', Player::where('name', 'Ana')->value('registration'));
     }
 
     public function test_a_file_over_the_size_ceiling_is_rejected(): void
@@ -262,6 +282,56 @@ class ImportTest extends TestCase
         $this->assertSame('NF-1', $invoice->number);
         $this->assertSame('Acme', $invoice->customer);
         $this->assertEquals(1234.50, (float) $invoice->total);
+    }
+
+    /**
+     * `mimes` sniffs the content, so a file that is not a spreadsheet at all is
+     * turned away by the upload rules and never reaches the reader.
+     */
+    public function test_a_file_disguised_as_a_spreadsheet_is_rejected(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'luminix-sheets-test-').'.xlsx';
+        file_put_contents($path, 'isto não é uma planilha');
+
+        $this->actingAs($this->user())
+            ->json('POST', '/luminix-api/players/import', [
+                'file' => new UploadedFile($path, 'planilha.xlsx', null, null, true),
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.file.0', 'Only xlsx files are accepted. '
+                .'Re-save the file in one of these formats and try again.');
+
+        @unlink($path);
+
+        $this->assertSame(0, Player::count());
+    }
+
+    /**
+     * A valid xlsx whose worksheet is broken passes every upload rule — the
+     * container is a real spreadsheet. It has to come back as a 422 the person
+     * can act on, not as the 500 an unhandled reader error produces.
+     */
+    public function test_a_corrupt_spreadsheet_is_refused_instead_of_failing(): void
+    {
+        $file = $this->makeSheet([
+            ['Name', 'Registration'],
+            ['Ana', '007'],
+        ]);
+
+        $zip = new \ZipArchive;
+        $zip->open($file->getRealPath());
+        $zip->addFromString('xl/worksheets/sheet1.xml', '<worksheet><sheetData>');
+        $zip->close();
+
+        $this->actingAs($this->user())
+            ->json('POST', '/luminix-api/players/import', ['file' => $file])
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'message',
+                'The file could not be read as a spreadsheet. Re-save it and try again.'
+            );
+
+        $this->assertSame(0, Player::count());
     }
 
     // Lotes e teto

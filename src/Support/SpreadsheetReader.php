@@ -3,6 +3,8 @@
 namespace Luminix\Sheets\Support;
 
 use Generator;
+use Luminix\Sheets\Exceptions\UnreadableSheetException;
+use OpenSpout\Common\Exception\OpenSpoutException;
 use OpenSpout\Reader\CSV\Reader as CsvReader;
 use OpenSpout\Reader\ODS\Reader as OdsReader;
 use OpenSpout\Reader\ReaderInterface;
@@ -21,7 +23,15 @@ class SpreadsheetReader
     public static function rows(string $path, string $format): Generator
     {
         $reader = static::makeReader($format);
-        $reader->open($path);
+
+        // Every OpenSpout failure becomes the package's own exception: a file
+        // that is not a spreadsheet is a bad request, and the caller gets that
+        // answer instead of the reader's IOException reaching the handler.
+        try {
+            $reader->open($path);
+        } catch (OpenSpoutException $e) {
+            throw new UnreadableSheetException($e);
+        }
 
         try {
             foreach ($reader->getSheetIterator() as $sheet) {
@@ -31,6 +41,10 @@ class SpreadsheetReader
 
                 break; // active sheet only, mirroring the previous behaviour
             }
+        } catch (OpenSpoutException $e) {
+            // A file can also go bad halfway through — truncated, or valid zip
+            // wrapping broken XML.
+            throw new UnreadableSheetException($e);
         } finally {
             $reader->close();
         }

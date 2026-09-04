@@ -23,16 +23,6 @@ class MakeImportCommand extends GeneratorCommand
         return $rootNamespace.'\\Sheets\\Import';
     }
 
-    /**
-     * Ensure the generated file goes under app/Sheets/Import/.
-     */
-    protected function getPath($name): string
-    {
-        $name = Str::replaceFirst($this->rootNamespace(), '', $name);
-
-        return app_path(str_replace('\\', '/', $name).'.php');
-    }
-
     protected function buildClass($name): string
     {
         $stub = parent::buildClass($name);

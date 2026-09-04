@@ -288,6 +288,10 @@ class SheetEngine
      * spreadsheets produce: a short row pads with null, a long one is cut.
      * `array_combine` would fatal on both.
      *
+     * Repeated header labels are last-wins: the row handed to map() is keyed by
+     * label, so two columns sharing one cannot both survive. Import handlers
+     * that need them apart must rename a column in the file.
+     *
      * @param  array<int, string>  $headers
      * @param  array<int, mixed>  $raw
      * @return array<string, mixed>

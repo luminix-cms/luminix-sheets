@@ -18,7 +18,12 @@ class LuminixSheetsServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/sheets.php', 'luminix.sheets');
+        // Recursive, not mergeConfigFrom: that one is a shallow array_merge, so
+        // an application publishing a trimmed config/luminix/sheets.php would
+        // drop whole blocks of defaults. `permissions` is why it matters — an
+        // absent verb reads as null, and null is documented as turning off both
+        // the gate and the row scope.
+        $this->replaceConfigRecursivelyFrom(__DIR__.'/../config/sheets.php', 'luminix.sheets');
 
         // Registered here, not in boot(): luminix/backend generates its routes
         // during its own boot(), and every provider's register() runs first.

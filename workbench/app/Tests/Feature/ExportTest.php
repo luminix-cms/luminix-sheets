@@ -247,6 +247,24 @@ class ExportTest extends TestCase
         $this->assertSame($before, $this->scratchFiles());
     }
 
+    /**
+     * The happy path leaves nothing behind either: the scratch file is removed
+     * once the response has finished streaming it.
+     */
+    public function test_the_scratch_file_is_removed_after_the_download(): void
+    {
+        Invoice::create(['number' => 'NF-1', 'customer' => 'Acme', 'total' => 1]);
+
+        $before = $this->scratchFiles();
+
+        $this->actingAs($this->user())
+            ->get('/luminix-api/invoices/export')
+            ->assertStatus(200)
+            ->streamedContent();
+
+        $this->assertSame($before, $this->scratchFiles());
+    }
+
     // Helpers
 
     private function player(string $name, array $attributes = []): Player

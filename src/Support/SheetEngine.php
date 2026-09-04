@@ -213,8 +213,18 @@ class SheetEngine
 
         return response()->stream(
             function () use ($path) {
-                readfile($path);
-                @unlink($path);
+                // PHP kills the script the moment the client hangs up during
+                // output, and this unlink is the only thing that removes the
+                // file — an aborted download would leave it in the system temp
+                // dir for good. Finishing the callback costs nothing: writes to
+                // a closed socket fail immediately.
+                ignore_user_abort(true);
+
+                try {
+                    readfile($path);
+                } finally {
+                    @unlink($path);
+                }
             },
             200,
             [

@@ -50,6 +50,15 @@ return [
         // convention in the consuming applications. OpenSpout also reads csv
         // and ods; add them here when a project needs them.
         'formats' => ['xlsx'],
+
+        // Rows persisted per batch while streaming an import. The engine never
+        // holds more than one batch, so this is what the import costs in memory.
+        'chunk_size' => env('LUMINIX_SHEETS_IMPORT_CHUNK', 500),
+
+        // Maximum number of rows accepted in a single import request. A file
+        // above it is refused with a 422 instead of running for minutes; that
+        // volume belongs in a queued job. Set to null to disable the limit.
+        'max_rows' => env('LUMINIX_SHEETS_IMPORT_MAX_ROWS'),
     ],
 
     /*

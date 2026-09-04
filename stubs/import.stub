@@ -43,7 +43,13 @@ class {{ class }} extends DefaultImportable
 
     // public function beforeImport(UploadedFile $file): void {}
 
-    // public function afterImport(Collection $imported): void {}
+    // Fires once per persisted batch, with that batch alone — this is where
+    // per-record post-processing belongs.
+    // public function afterChunk(Collection $imported): void {}
+
+    // Fires once at the end, with the total. It receives a count and not the
+    // models: holding every one of them is what a streamed import avoids.
+    // public function afterImport(int $imported): void {}
 
     // public function useTransaction(): bool { return true; }
 

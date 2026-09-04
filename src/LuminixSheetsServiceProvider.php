@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Luminix\Backend\Controllers\ResourceController;
 use Luminix\Backend\Services\RouteGenerator;
+use Luminix\Sheets\Exceptions\ImportRowLimitException;
 use Luminix\Sheets\Exceptions\ImportValidationException;
 use Luminix\Sheets\Http\Requests\ImportRequest;
 use Luminix\Sheets\Support\ModelSheetResolver;
@@ -87,7 +88,7 @@ class LuminixSheetsServiceProvider extends ServiceProvider
 
             try {
                 $imported = SheetEngine::import($class, $handler, $request->file('file'));
-            } catch (ImportValidationException $e) {
+            } catch (ImportValidationException|ImportRowLimitException $e) {
                 return response()->json($e->toArray(), 422);
             }
 
@@ -95,10 +96,10 @@ class LuminixSheetsServiceProvider extends ServiceProvider
                 'message' => trans_choice(
                     '{0} No records imported.|{1} :count record imported successfully.'
                         .'|[2,*] :count records imported successfully.',
-                    $imported->count(),
-                    ['count' => $imported->count()],
+                    $imported,
+                    ['count' => $imported],
                 ),
-                'count' => $imported->count(),
+                'count' => $imported,
             ], 201);
         });
 

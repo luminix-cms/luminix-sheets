@@ -40,11 +40,24 @@ interface ImportsFromSheet
     public function beforeImport(UploadedFile $file): void;
 
     /**
-     * Called once after all rows have been successfully persisted.
+     * Called once for every batch the engine persists, with the models of that
+     * batch alone.
+     *
+     * This is where per-record post-processing belongs. The engine never holds
+     * more than one batch, so a handler that hoards what it receives here is
+     * the one thing that can still make an import grow with the file.
      *
      * @param  Collection<int, Model>  $imported
      */
-    public function afterImport(Collection $imported): void;
+    public function afterChunk(Collection $imported): void;
+
+    /**
+     * Called once after every row has been persisted, with the total.
+     *
+     * It receives a count rather than the models: handing over the whole set
+     * would mean keeping it in memory for the length of the import.
+     */
+    public function afterImport(int $imported): void;
 
     /**
      * Whether to wrap the entire import in a single database transaction.

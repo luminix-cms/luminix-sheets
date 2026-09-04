@@ -136,6 +136,8 @@ banco desfaz todas as anteriores.
 'import' => [
     'max_file_size_kb' => 10240,
     'formats' => ['xlsx'],
+    'chunk_size' => 500,        // linhas gravadas por lote
+    'max_rows' => null,         // teto de linhas por requisição
 ],
 
 'export' => [
@@ -239,11 +241,19 @@ passo.
 | `allowedColumns()` | Colunas aceitas do arquivo |
 | `headingRow()` | Em que linha está o cabeçalho |
 | `useTransaction()` | Envolver tudo em uma transação |
-| `beforeImport(UploadedFile $file)` / `afterImport(Collection $imported)` | Ganchos |
+| `beforeImport(UploadedFile $file)` | Gancho, antes da primeira linha |
+| `afterChunk(Collection $imported)` | Gancho, uma vez por lote gravado |
+| `afterImport(int $imported)` | Gancho, uma vez no fim, com o total |
 
 `allowedColumns()` é aplicado **pelo motor**, não só pelo handler padrão: um
 handler que sobrescreve `map()` e devolve uma coluna fora da lista não consegue
 gravá-la.
+
+O pós-processamento por registro vai em `afterChunk()`, que recebe só o lote
+recém-gravado. `afterImport()` recebe um número, e não os models, justamente
+porque guardar todos eles é o que uma importação em lotes evita — um handler que
+acumula o que `afterChunk()` entrega é a única coisa que ainda faz a importação
+crescer com o arquivo.
 
 ## Colunas ocultas
 
@@ -268,15 +278,26 @@ A chave primária nunca é importável.
 
 ## Streaming e memória
 
-O pacote não monta a planilha em memória. Na exportação:
+O pacote não monta a planilha em memória, nos dois sentidos. Na exportação:
 
-1. o resultado é lido do banco em lotes de `chunk_size`;
+1. o resultado é lido do banco em lotes de `export.chunk_size`;
 2. cada linha é escrita no arquivo assim que é mapeada;
 3. o arquivo é fechado **antes** de a resposta começar.
 
 O passo 3 é deliberado: uma falha no meio da escrita vira `500`, e não um `200`
 carregando um anexo truncado. O arquivo temporário é removido tanto no erro
 quanto ao fim do download.
+
+Na importação, o arquivo é lido linha a linha e gravado em lotes de
+`import.chunk_size`. Nada além de um lote fica retido: 10.000 linhas custam o
+mesmo que 100. `import.max_rows` recusa com `422` um arquivo grande demais para
+uma requisição síncrona — acima disso o trabalho é de um job em fila, não de um
+`POST`.
+
+A leitura toda acontece mesmo depois da primeira linha inválida, para que o
+`422` liste todas de uma vez. A gravação, essa, para na primeira: dentro de uma
+transação os lotes já gravados voltam atrás, e sem transação eles ficam — que é
+o que `useTransaction()` desligado quer dizer.
 
 Todo valor é gravado como texto, de modo que uma matrícula `007` continua `007`
 em vez de virar `7`.

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Luminix\Sheets\Contracts\ExportsFromSheet;
 use Luminix\Sheets\Contracts\ImportsFromSheet;
+use Luminix\Sheets\Exceptions\ImportRowLimitException;
 use Luminix\Sheets\Exceptions\ImportValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -18,25 +19,64 @@ class SheetEngine
     /**
      * Process an uploaded spreadsheet file and persist rows to the database.
      *
+     * Rows are read, mapped, validated and persisted one batch at a time, so
+     * nothing larger than a single batch is ever held: an import costs the same
+     * memory whether the file carries a hundred rows or a hundred thousand.
+     *
      * @param  string  $modelClass  Fully-qualified Eloquent model class
-     * @return Collection<int, Model> The successfully imported models
+     * @return int How many rows were persisted
      *
      * @throws ImportValidationException
+     * @throws ImportRowLimitException
      */
     public static function import(
         string $modelClass,
         ImportsFromSheet $handler,
         UploadedFile $file
-    ): Collection {
+    ): int {
         $handler->beforeImport($file);
 
+        $run = fn (): int => static::read($modelClass, $handler, $file);
+
+        $imported = $handler->useTransaction()
+            ? DB::transaction($run)
+            : $run();
+
+        $handler->afterImport($imported);
+
+        return $imported;
+    }
+
+    /**
+     * The streaming pass: every row is mapped, validated and buffered until the
+     * buffer reaches a batch, then written and dropped.
+     *
+     * The whole file is read even after the first invalid row, so the caller
+     * gets every bad row at once rather than one per upload. Persistence stops
+     * at that first error: inside a transaction the batches already written are
+     * rolled back by the throw, and without one they are all that survives —
+     * which is what running an import without a transaction means.
+     *
+     * @throws ImportValidationException
+     * @throws ImportRowLimitException
+     */
+    protected static function read(
+        string $modelClass,
+        ImportsFromSheet $handler,
+        UploadedFile $file
+    ): int {
         $headingRow = max(1, $handler->headingRow());
         $format = strtolower($file->getClientOriginalExtension() ?: 'xlsx');
 
+        $chunk = max(1, (int) config('luminix.sheets.import.chunk_size', 500));
+        $maxRows = config('luminix.sheets.import.max_rows');
+
         $headers = null;
         $errors = [];
-        $mapped = [];
+        $buffer = [];
         $index = 0;
+        $read = 0;
+        $imported = 0;
 
         foreach (SpreadsheetReader::rows($file->getRealPath(), $format) as $number => $raw) {
             if ($number < $headingRow) {
@@ -72,6 +112,10 @@ class SheetEngine
                 continue;
             }
 
+            if ($maxRows !== null && ++$read > (int) $maxRows) {
+                throw new ImportRowLimitException((int) $maxRows);
+            }
+
             $rules = $handler->rules();
 
             if (! empty($rules)) {
@@ -84,34 +128,58 @@ class SheetEngine
                 }
             }
 
-            $mapped[] = $data;
+            if ($errors !== []) {
+                continue;
+            }
+
+            $buffer[] = $data;
+
+            if (count($buffer) >= $chunk) {
+                $imported += static::persist($modelClass, $handler, $buffer);
+            }
         }
 
-        if (! empty($errors)) {
+        if ($errors === [] && $buffer !== []) {
+            $imported += static::persist($modelClass, $handler, $buffer);
+        }
+
+        if ($errors !== []) {
             throw new ImportValidationException($errors);
         }
 
+        return $imported;
+    }
+
+    /**
+     * Saves one batch and hands it to the handler, then empties the buffer.
+     *
+     * Rows are saved one by one rather than mass-inserted so model events,
+     * casts and timestamps keep working; what the batching buys is memory, not
+     * round-trips.
+     *
+     * @param  array<int, array<string, mixed>>  $buffer  Emptied in place
+     */
+    protected static function persist(
+        string $modelClass,
+        ImportsFromSheet $handler,
+        array &$buffer
+    ): int {
+        /** @var Collection<int, Model> $imported */
         $imported = new Collection;
 
-        $persist = function () use ($modelClass, $mapped, &$imported) {
-            foreach ($mapped as $attributes) {
-                /** @var Model $model */
-                $model = new $modelClass;
-                $model->fill($attributes);
-                $model->save();
-                $imported->push($model);
-            }
-        };
-
-        if ($handler->useTransaction()) {
-            DB::transaction($persist);
-        } else {
-            $persist();
+        foreach ($buffer as $attributes) {
+            /** @var Model $model */
+            $model = new $modelClass;
+            $model->fill($attributes);
+            $model->save();
+            $imported->push($model);
         }
 
-        $handler->afterImport($imported);
+        $buffer = [];
 
-        return $imported;
+        $handler->afterChunk($imported);
+
+        return $imported->count();
     }
 
     /**

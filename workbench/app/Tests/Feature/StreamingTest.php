@@ -63,6 +63,47 @@ class StreamingTest extends TestCase
         );
     }
 
+    public function test_memory_use_does_not_grow_with_the_size_of_the_import(): void
+    {
+        $file = $this->makeSheet($this->playerRows(10000));
+
+        config()->set('luminix.sheets.import.chunk_size', 200);
+
+        gc_collect_cycles();
+        memory_reset_peak_usage();
+        $before = memory_get_usage();
+
+        $this->actingAs($this->user())
+            ->json('POST', '/luminix-api/players/import', ['file' => $file])
+            ->assertStatus(201)
+            ->assertJson(['count' => 10000]);
+
+        $growth = memory_get_peak_usage() - $before;
+
+        // Same ceiling as the export: the engine must hold a chunk, never the
+        // file. Accumulating every mapped row and every saved model costs more
+        // than three times this for the same sheet.
+        $this->assertLessThan(
+            16 * 1024 * 1024,
+            $growth,
+            'The import allocated '.round($growth / 1024 / 1024, 1).' MB for 10.000 rows.'
+        );
+    }
+
+    /**
+     * @return array<int, array<int, string>>
+     */
+    private function playerRows(int $count): array
+    {
+        $rows = [['Name', 'Registration', 'Score']];
+
+        for ($i = 1; $i <= $count; $i++) {
+            $rows[] = ['Player '.$i, str_pad((string) $i, 6, '0', STR_PAD_LEFT), (string) $i];
+        }
+
+        return $rows;
+    }
+
     private function seedPlayers(int $count): void
     {
         $now = now()->toDateTimeString();

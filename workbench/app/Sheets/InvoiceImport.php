@@ -2,6 +2,7 @@
 
 namespace Workbench\App\Sheets;
 
+use Illuminate\Support\Collection;
 use Luminix\Sheets\Default\DefaultImportable;
 
 class InvoiceImport extends DefaultImportable
@@ -9,9 +10,27 @@ class InvoiceImport extends DefaultImportable
     /** Flipped by the tests covering rollback vs. partial persistence. */
     public static bool $transactional = true;
 
+    /** @var int[] One entry per persisted batch, holding its size. */
+    public static array $chunks = [];
+
+    /** The total handed to afterImport(), or null when it never ran. */
+    public static ?int $total = null;
+
     public static function reset(): void
     {
         static::$transactional = true;
+        static::$chunks = [];
+        static::$total = null;
+    }
+
+    public function afterChunk(Collection $imported): void
+    {
+        static::$chunks[] = $imported->count();
+    }
+
+    public function afterImport(int $imported): void
+    {
+        static::$total = $imported;
     }
 
     /**

@@ -54,7 +54,12 @@ class DefaultImportable implements ImportsFromSheet
         //
     }
 
-    public function afterImport(Collection $imported): void
+    public function afterChunk(Collection $imported): void
+    {
+        //
+    }
+
+    public function afterImport(int $imported): void
     {
         //
     }

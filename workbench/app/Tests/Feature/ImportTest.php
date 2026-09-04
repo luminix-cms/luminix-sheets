@@ -263,4 +263,54 @@ class ImportTest extends TestCase
         $this->assertSame('Acme', $invoice->customer);
         $this->assertEquals(1234.50, (float) $invoice->total);
     }
+
+    // Lotes e teto
+
+    public function test_the_hooks_report_each_batch_and_the_total(): void
+    {
+        config()->set('luminix.sheets.import.chunk_size', 2);
+
+        $file = $this->makeSheet([
+            ['Relatório'],
+            ['Número', 'Cliente', 'Total'],
+            ['NF-1', 'Acme', '10,00'],
+            ['NF-2', 'Globex', '20,00'],
+            ['NF-3', 'Initech', '30,00'],
+        ]);
+
+        $this->actingAs($this->user())
+            ->json('POST', '/luminix-api/invoices/import', ['file' => $file])
+            ->assertStatus(201)
+            ->assertJson(['count' => 3]);
+
+        // Three rows at a chunk of two: the hook fires per batch, never once
+        // with the whole file, and the total arrives separately.
+        $this->assertSame([2, 1], InvoiceImport::$chunks);
+        $this->assertSame(3, InvoiceImport::$total);
+    }
+
+    public function test_a_file_above_the_row_ceiling_is_refused(): void
+    {
+        config()->set('luminix.sheets.import.max_rows', 2);
+
+        $file = $this->makeSheet([
+            ['Relatório'],
+            ['Número', 'Cliente', 'Total'],
+            ['NF-1', 'Acme', '10,00'],
+            ['NF-2', 'Globex', '20,00'],
+            ['NF-3', 'Initech', '30,00'],
+        ]);
+
+        $this->actingAs($this->user())
+            ->json('POST', '/luminix-api/invoices/import', ['file' => $file])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'The import accepts at most 2 rows per file.');
+
+        $this->assertSame(0, Invoice::count());
+    }
+
+    public function test_the_row_ceiling_is_off_by_default(): void
+    {
+        $this->assertNull(config('luminix.sheets.import.max_rows'));
+    }
 }

@@ -1,9 +1,11 @@
 # Gate for luminix/sheets. Model: /arandu references/ci-cd.md + ci-cd-laravel.md.
 #
-# `checks` is the whole pipeline here, and it gates rather than deploys: a
-# package is consumed by Composer version constraint, so there is nothing to
-# build, tag or ship. `dusk` is n/a — no UI. No MySQL service either: the suite
-# runs on sqlite in memory (phpunit.xml).
+# `checks` gates every push and PR to master; `release` runs on a push to master
+# only, after every leg of `checks` is green, and tags that commit and publishes
+# its GitHub Release. The tag is the whole release: a package is consumed by
+# Composer version constraint, so there is nothing to build or deploy. `dusk`
+# is n/a — no UI. No MySQL service either: the suite runs on sqlite in memory
+# (phpunit.xml).
 #
 # The matrix is the point, and it carries two constraints at once.
 #
@@ -79,23 +81,28 @@ jobs:
   release:
     name: Release
     needs: checks
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          fetch-depth: 0   # semantic-version reads history; shallow = wrong version, silently
 
+      # Composer tags carry no `v`. The patterns are spelled out because v6
+      # defaults them to Conventional Commits, which ignores `(MAJOR)`/`(MINOR)`.
       - name: Determine version
-        uses: paulhatch/semantic-version@v5.4.0
+        uses: paulhatch/semantic-version@v6.0.2
         id: semver
         with:
           tag_prefix: ''
+          major_pattern: '(MAJOR)'
+          minor_pattern: '(MINOR)'
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.semver.outputs.version_tag }}
           target_commitish: ${{ github.sha }}

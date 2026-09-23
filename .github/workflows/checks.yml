@@ -75,3 +75,29 @@ jobs:
       - run: composer test
       - if: matrix.coverage == 'pcov'
         run: composer test:coverage
+
+  release:
+    name: Release
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        uses: paulhatch/semantic-version@v5.4.0
+        id: semver
+        with:
+          tag_prefix: ''
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.semver.outputs.version_tag }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          generate_release_notes: true

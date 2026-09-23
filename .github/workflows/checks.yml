@@ -58,7 +58,7 @@ jobs:
           extensions: mbstring, dom, curl, zip, pdo_sqlite, sqlite3
           coverage: ${{ matrix.coverage }}
       - id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
       # composer.lock is gitignored (library), so the key hashes the constraints.
       - uses: actions/cache@v6
         with:
